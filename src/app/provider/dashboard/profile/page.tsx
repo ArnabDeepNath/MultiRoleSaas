@@ -25,6 +25,7 @@ export default function ProviderProfilePage() {
 
   const [bio, setBio] = useState("");
   const [providerType, setProviderType] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -37,6 +38,7 @@ export default function ProviderProfilePage() {
           setProfile(data);
           setBio(data.bio || "");
           setProviderType(data.providerType || "");
+          setPhoneNumber(data.phoneNumber || "");
         }
       } catch (err) {
         console.error("Error fetching profile:", err);
@@ -59,6 +61,7 @@ export default function ProviderProfilePage() {
       const updatedData: Partial<ServiceProviderProfile> = {
         bio,
         providerType,
+        phoneNumber,
         updatedAt: Date.now(),
       };
 
@@ -78,7 +81,7 @@ export default function ProviderProfilePage() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Spinner size="lg" />
-      </div >
+      </div>
     );
   }
 
@@ -125,8 +128,18 @@ export default function ProviderProfilePage() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">
-                    Bio
+                    Phone Number
                   </label>
+                  <Input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="e.g. +91 98765 43210"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Bio</label>
                   <textarea
                     className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={4}
@@ -156,6 +169,14 @@ export default function ProviderProfilePage() {
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-gray-500">Provider Type:</span>
                   <span className="font-medium capitalize">{profile.providerType}</span>
+                </div>
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-gray-500">Phone:</span>
+                  <span className="font-medium">{profile.phoneNumber || "Not provided"}</span>
+                </div>
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-gray-500">Rating:</span>
+                  <span className="font-medium">{profile.rating || 0} / 5</span>
                 </div>
               </div>
             </Card>

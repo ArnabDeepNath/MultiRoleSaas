@@ -7,7 +7,7 @@ function cn(...inputs: ClassValue[]) {
 }
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "outline" | "ghost" | "danger";
+  variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "success" | "warning";
   size?: "sm" | "md" | "lg" | "icon";
   isLoading?: boolean;
   asChild?: boolean;
@@ -16,11 +16,13 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "primary", size = "md", isLoading, asChild, children, ...props }, ref) => {
     const variants = {
-      primary: "bg-blue-600 text-white hover:bg-blue-700",
-      secondary: "bg-gray-600 text-white hover:bg-gray-700",
-      outline: "border border-gray-300 bg-transparent hover:bg-gray-100 text-gray-700",
-      ghost: "bg-transparent hover:bg-gray-100 text-gray-700",
-      danger: "bg-red-600 text-white hover:bg-red-700",
+      primary: "bg-[#3b4cca] text-white hover:bg-[#2a3693] shadow-sm",
+      secondary: "bg-slate-600 text-white hover:bg-slate-700 shadow-sm",
+      outline: "border border-slate-300 bg-white hover:bg-slate-50 text-slate-700",
+      ghost: "bg-transparent hover:bg-slate-100 text-slate-700",
+      danger: "bg-red-600 text-white hover:bg-red-700 shadow-sm",
+      success: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm",
+      warning: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm",
     };
 
     const sizes = {
@@ -31,7 +33,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const combinedClassName = cn(
-      "inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none",
+      "inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#3b4cca] focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]",
       variants[variant],
       sizes[size],
       className
