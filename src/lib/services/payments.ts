@@ -2,7 +2,6 @@ import { db } from "@/lib/firebase";
 import { collection, doc, addDoc, getDocs, query, where, updateDoc, getDoc, orderBy } from "firebase/firestore";
 import { Payment, EscrowTransaction, SubscriptionPlan, SubscriptionBilling, UserProfile } from "@/types";
 export type { EscrowTransaction };
-import { updateUserProfile } from "@/lib/auth-utils";
 
 const paymentsRef = collection(db, "payments");
 const escrowRef = collection(db, "escrow");
