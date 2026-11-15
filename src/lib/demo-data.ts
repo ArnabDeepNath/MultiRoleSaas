@@ -5,7 +5,7 @@ import {
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc, collection, addDoc } from "firebase/firestore";
-import { UserProfile, UserRole, AppSettings, Service, ServiceRequest, EscrowTransaction } from "@/types";
+import { UserProfile, AppSettings, Service, ServiceRequest, EscrowTransaction, SubscriptionConfig } from "@/types";
 
 export const DEMO_CREDENTIALS = {
   admin: { email: "admin@omnistud.com", password: "demo123", name: "OmniStud Admin" },
@@ -17,7 +17,7 @@ export const DEMO_CREDENTIALS = {
 
 export const DEFAULT_ADMIN_KEY = "ADMIN123";
 
-export const SUBSCRIPTION_PLANS = [
+export const SUBSCRIPTION_PLANS: SubscriptionConfig[] = [
   {
     plan: "BASIC",
     name: "OmniBasic Student",
@@ -45,6 +45,46 @@ export const SUBSCRIPTION_PLANS = [
   },
 ];
 
+export const TRANSPORTER_SUBSCRIPTION_PLANS: SubscriptionConfig[] = [
+  {
+    plan: "TRANSPORTER_BASIC",
+    name: "OmniRoute Starter",
+    monthlyPrice: 49,
+    yearlyPrice: 470,
+    features: ["List transport services", "Manage route requests", "Basic earnings reports"],
+    color: "#ea580c",
+    approved: true,
+    status: "APPROVED",
+    roles: ["SERVICE_PROVIDER"],
+    providerTypes: ["TRANSPORTER"],
+  },
+  {
+    plan: "TRANSPORTER_PRO",
+    name: "OmniFleet Pro",
+    monthlyPrice: 99,
+    yearlyPrice: 950,
+    features: ["Everything in Starter", "Live GPS check-ins", "Driver assignments", "Priority leads"],
+    popular: true,
+    color: "#f59e0b",
+    approved: true,
+    status: "APPROVED",
+    roles: ["SERVICE_PROVIDER"],
+    providerTypes: ["TRANSPORTER"],
+  },
+  {
+    plan: "TRANSPORTER_ENTERPRISE",
+    name: "OmniTransport Enterprise",
+    monthlyPrice: 249,
+    yearlyPrice: 2390,
+    features: ["Everything in Pro", "Multiple vehicles and drivers", "Advanced reports", "Priority support"],
+    color: "#7c3aed",
+    approved: true,
+    status: "APPROVED",
+    roles: ["SERVICE_PROVIDER"],
+    providerTypes: ["TRANSPORTER"],
+  },
+];
+
 export async function seedDemoData() {
   // Seed app settings if not present
   const settingsRef = doc(db, "settings", "app_settings");
@@ -60,7 +100,7 @@ export async function seedDemoData() {
   }
 
   // Seed subscription plans
-  for (const plan of SUBSCRIPTION_PLANS) {
+  for (const plan of [...SUBSCRIPTION_PLANS, ...TRANSPORTER_SUBSCRIPTION_PLANS]) {
     const planRef = doc(db, "subscriptionPlans", plan.plan);
     const planSnap = await getDoc(planRef);
     if (!planSnap.exists()) {
@@ -78,7 +118,7 @@ export async function seedDemoData() {
         const userCredential = await signInWithEmailAndPassword(auth, creds.email, creds.password);
         uid = userCredential.user.uid;
         await auth.signOut();
-      } catch (err) {
+      } catch {
         const newUser = await createUserWithEmailAndPassword(auth, creds.email, creds.password);
         uid = newUser.user.uid;
         await updateProfile(newUser.user, { displayName: creds.name });

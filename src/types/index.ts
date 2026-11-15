@@ -1,7 +1,7 @@
 export type UserRole = 'SUPER_ADMIN' | 'SERVICE_PROVIDER' | 'STUDENT' | 'PARENT' | 'TEACHER' | 'TRANSPORTER';
 export type ProviderType = 'TEACHER' | 'TRANSPORTER' | 'INSTITUTION';
 export type PaymentStatus = 'PENDING' | 'COMPLETED';
-export type SubscriptionPlan = 'BASIC' | 'PRO' | 'ENTERPRISE';
+export type SubscriptionPlan = 'BASIC' | 'PRO' | 'ENTERPRISE' | 'TRANSPORTER_BASIC' | 'TRANSPORTER_PRO' | 'TRANSPORTER_ENTERPRISE';
 export type SubscriptionBilling = 'MONTHLY' | 'YEARLY';
 
 export interface UserProfile {
@@ -134,4 +134,10 @@ export interface SubscriptionConfig {
   features: string[];
   popular?: boolean;
   color: string;
+  approved?: boolean;
+  status?: string;
+  role?: UserRole;
+  roles?: UserRole[];
+  providerType?: ProviderType;
+  providerTypes?: ProviderType[];
 }

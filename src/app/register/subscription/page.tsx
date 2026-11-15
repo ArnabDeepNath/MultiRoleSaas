@@ -9,11 +9,12 @@ import { Alert } from "@/components/ui/Alert";
 import { updateSubscription } from "@/lib/auth-utils";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
-import { SubscriptionConfig, SubscriptionBilling } from "@/types";
-import { Check, Sparkles, CreditCard, Calendar, HelpCircle } from "lucide-react";
+import { SubscriptionConfig, SubscriptionBilling, ServiceProviderProfile } from "@/types";
+import { SUBSCRIPTION_PLANS, TRANSPORTER_SUBSCRIPTION_PLANS } from "@/lib/demo-data";
+import { Check, Sparkles, CreditCard, HelpCircle } from "lucide-react";
 
 export default function SubscriptionPage() {
-  const { firebaseUser, refreshUser } = useAuth();
+  const { user, firebaseUser, refreshUser } = useAuth();
   const router = useRouter();
   const [billing, setBilling] = useState<SubscriptionBilling>("MONTHLY");
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
@@ -24,45 +25,40 @@ export default function SubscriptionPage() {
 
   useEffect(() => {
     const fetchPlans = async () => {
+      const providerType = (user as ServiceProviderProfile | null)?.providerType;
+      const fallbackPlans = providerType === "TRANSPORTER"
+        ? TRANSPORTER_SUBSCRIPTION_PLANS
+        : SUBSCRIPTION_PLANS;
+
       try {
         const plansRef = collection(db, "subscriptionPlans");
         const snap = await getDocs(plansRef);
         const data = snap.docs.map((d) => d.data() as SubscriptionConfig);
-        setPlans(data.sort((a, b) => a.monthlyPrice - b.monthlyPrice));
+        const eligiblePlans = data.filter((plan) => {
+          const isApproved = plan.approved === true ||
+            plan.status?.toUpperCase() === "APPROVED" ||
+            plan.status?.toUpperCase() === "ACTIVE" ||
+            (plan.approved === undefined && plan.status === undefined);
+          const matchesRole = (!plan.role && !plan.roles?.length) ||
+            (user?.role !== undefined && (plan.role === user.role || plan.roles?.includes(user.role)));
+          const matchesProviderType = (!plan.providerType && !plan.providerTypes?.length) ||
+            (providerType !== undefined && (plan.providerType === providerType || plan.providerTypes?.some((type) => type === providerType)));
+          return isApproved && matchesRole && matchesProviderType;
+        });
+        const transporterPlans = eligiblePlans.filter((plan) =>
+          plan.providerType === "TRANSPORTER" || plan.providerTypes?.includes("TRANSPORTER")
+        );
+        const availablePlans = providerType === "TRANSPORTER"
+          ? (transporterPlans.length > 0 ? transporterPlans : fallbackPlans)
+          : (eligiblePlans.length > 0 ? eligiblePlans : fallbackPlans);
+        setPlans([...availablePlans].sort((a, b) => a.monthlyPrice - b.monthlyPrice));
       } catch (err) {
         console.error("Error fetching plans:", err);
-        // Fallback plans
-        setPlans([
-          {
-            plan: "BASIC",
-            name: "OmniBasic Student",
-            monthlyPrice: 15,
-            yearlyPrice: 144,
-            features: ["Search for tutors", "View basic transport routes", "Access book marketplace"],
-            color: "#3b4cca",
-          },
-          {
-            plan: "PRO",
-            name: "OmniPro Family",
-            monthlyPrice: 30,
-            yearlyPrice: 288,
-            features: ["All Basic features", "Unlimited tutor searches", "Live GPS transport tracking", "Ad-free marketplace listings", "Priority booking"],
-            popular: true,
-            color: "#f59e0b",
-          },
-          {
-            plan: "ENTERPRISE",
-            name: "OmniSchool Partner",
-            monthlyPrice: 200,
-            yearlyPrice: 1920,
-            features: ["School-wide access", "Bulk accounts", "Integrated school transport", "Administrative dashboard", "Custom feature requests"],
-            color: "#7c3aed",
-          },
-        ]);
+        setPlans(fallbackPlans);
       }
     };
     fetchPlans();
-  }, []);
+  }, [user]);
 
   const handleSubscribe = (plan: string) => {
     setSelectedPlan(plan);
@@ -84,9 +80,9 @@ export default function SubscriptionPage() {
       await updateSubscription(firebaseUser.uid, selectedPlan, billing);
       await refreshUser();
       router.push("/register/profile");
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || "Payment failed. Please try again.");
+      setError(err instanceof Error ? err.message : "Payment failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
