@@ -11,9 +11,8 @@ import {
   where,
   onSnapshot,
   orderBy,
-  Timestamp,
 } from "firebase/firestore";
-import { Service, ServiceRequest, ServiceProviderProfile, Notification } from "@/types";
+import { Service, ServiceRequest, Notification, UserProfile } from "@/types";
 
 const servicesRef = collection(db, "services");
 const requestsRef = collection(db, "serviceRequests");
@@ -25,9 +24,13 @@ export async function getAllServices(): Promise<Service[]> {
 }
 
 export async function getServicesByProvider(providerId: string): Promise<Service[]> {
-  const q = query(servicesRef, where("providerId", "==", providerId), orderBy("createdAt", "desc"));
+  // Do not order in Firestore: older service documents may not have createdAt,
+  // and combining where/orderBy also requires a composite index.
+  const q = query(servicesRef, where("providerId", "==", providerId));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Service);
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }) as Service)
+    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 }
 
 export async function getServiceById(serviceId: string): Promise<Service | null> {
@@ -85,7 +88,7 @@ export async function createServiceRequest(studentId: string, service: Service) 
   return { id: docRef.id, ...payload } as ServiceRequest;
 }
 
-export async function getRequestsByProvider(providerId: string): Promise<(ServiceRequest & { service?: Service; student?: any })[]> {
+export async function getRequestsByProvider(providerId: string): Promise<(ServiceRequest & { service?: Service; student?: UserProfile })[]> {
   const q = query(requestsRef, where("providerId", "==", providerId), orderBy("createdAt", "desc"));
   const snap = await getDocs(q);
   const reqs = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ServiceRequest);
@@ -98,7 +101,7 @@ export async function getRequestsByProvider(providerId: string): Promise<(Servic
       return {
         ...r,
         service: serviceSnap.exists() ? ({ id: serviceSnap.id, ...serviceSnap.data() } as Service) : undefined,
-        student: studentSnap.exists() ? studentSnap.data() : undefined,
+        student: studentSnap.exists() ? (studentSnap.data() as UserProfile) : undefined,
       };
     })
   );

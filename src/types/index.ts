@@ -82,6 +82,8 @@ export interface Service {
   location?: string;
   rating?: number;
   reviews?: number;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface ServiceRequest {

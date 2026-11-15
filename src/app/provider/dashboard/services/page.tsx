@@ -13,20 +13,18 @@ import { db } from "@/lib/firebase";
 import {
   collection,
   addDoc,
-  getDocs,
-  query,
-  where,
   doc,
   deleteDoc,
   updateDoc,
 } from "firebase/firestore";
 import { Service } from "@/types";
+import { getServicesByProvider } from "@/lib/services/services";
 import { Pencil, Trash2 } from "lucide-react";
 
 const PROVIDER_ROLE = "SERVICE_PROVIDER";
 
 export default function ProviderServicesPage() {
-  const { user } = useAuth();
+  const { firebaseUser } = useAuth();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,15 +39,13 @@ export default function ProviderServicesPage() {
 
   useEffect(() => {
     const fetchServices = async () => {
-      if (!user) return;
+      if (!firebaseUser) {
+        setLoading(false);
+        return;
+      }
       try {
-        const servicesRef = collection(db, "services");
-        const q = query(servicesRef, where("providerId", "==", user.uid));
-        const querySnapshot = await getDocs(q);
-        const servicesData = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Service[];
+        setError(null);
+        const servicesData = await getServicesByProvider(firebaseUser.uid);
         setServices(servicesData);
       } catch (err) {
         console.error("Error fetching services:", err);
@@ -60,7 +56,7 @@ export default function ProviderServicesPage() {
     };
 
     fetchServices();
-  }, [user]);
+  }, [firebaseUser]);
 
   const resetForm = () => {
     setName("");
@@ -91,14 +87,14 @@ export default function ProviderServicesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!firebaseUser) return;
     setIsSubmitting(true);
     setError(null);
     setSuccess(false);
 
     try {
       const serviceData: Omit<Service, "id"> = {
-        providerId: user.uid,
+        providerId: firebaseUser.uid,
         name,
         description,
         price: parseFloat(price),
@@ -106,7 +102,7 @@ export default function ProviderServicesPage() {
       };
 
       if (editingId) {
-        await updateDoc(doc(db, "services", editingId), serviceData as any);
+        await updateDoc(doc(db, "services", editingId), serviceData);
         setServices(
           services.map((s) =>
             s.id === editingId ? { ...serviceData, id: editingId } : s
@@ -120,7 +116,7 @@ export default function ProviderServicesPage() {
       resetForm();
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error saving service:", err);
       setError("Failed to save service. Please check your inputs.");
     } finally {
@@ -205,7 +201,7 @@ export default function ProviderServicesPage() {
               {services.length === 0 ? (
                 <Card>
                   <p className="text-center text-gray-500">
-                    You haven't added any services yet.
+                    You have not added any services yet.
                   </p>
                 </Card>
               ) : (
