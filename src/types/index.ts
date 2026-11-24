@@ -20,6 +20,7 @@ export interface UserProfile {
   address?: string;
   city?: string;
   state?: string;
+  district?: string;
   country?: string;
   pincode?: string;
   blocked?: boolean;
@@ -80,6 +81,9 @@ export interface Service {
   providerType: string;
   category?: string;
   location?: string;
+  address?: string;
+  state?: string;
+  district?: string;
   rating?: number;
   reviews?: number;
   createdAt?: number;

@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Alert } from "@/components/ui/Alert";
 import { Spinner } from "@/components/ui/Spinner";
+import { LocationSelector } from "@/components/ui/LocationSelector";
+import { EMPTY_LOCATION, formatLocation, LocationValue } from "@/lib/location";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -35,6 +37,7 @@ export default function ProviderServicesPage() {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [type, setType] = useState("");
+  const [location, setLocation] = useState<LocationValue>({ ...EMPTY_LOCATION });
   const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,6 +66,7 @@ export default function ProviderServicesPage() {
     setDescription("");
     setPrice("");
     setType("");
+    setLocation({ ...EMPTY_LOCATION });
     setEditingId(null);
   };
 
@@ -71,6 +75,11 @@ export default function ProviderServicesPage() {
     setDescription(service.description);
     setPrice(service.price.toString());
     setType(service.providerType);
+    setLocation({
+      state: service.state || "",
+      district: service.district || "",
+      address: service.address || "",
+    });
     setEditingId(service.id);
   };
 
@@ -93,12 +102,17 @@ export default function ProviderServicesPage() {
     setSuccess(false);
 
     try {
+      const previousLocation = editingId
+        ? services.find((service) => service.id === editingId)?.location
+        : undefined;
       const serviceData: Omit<Service, "id"> = {
         providerId: firebaseUser.uid,
         name,
         description,
         price: parseFloat(price),
         providerType: type,
+        ...location,
+        location: [location.district, location.state].filter(Boolean).join(", ") || previousLocation || "",
       };
 
       if (editingId) {
@@ -180,6 +194,11 @@ export default function ProviderServicesPage() {
                     onChange={(e) => setType(e.target.value)}
                     placeholder="e.g. Teacher"
                   />
+                  <LocationSelector
+                    value={location}
+                    onChange={setLocation}
+                    className="md:grid-cols-1"
+                  />
                   <div className="flex gap-2">
                     <Button type="submit" className="flex-1" isLoading={isSubmitting}>
                       {editingId ? "Update" : "Add"}
@@ -216,6 +235,7 @@ export default function ProviderServicesPage() {
                         <p className="text-sm text-gray-600 line-clamp-2">
                           {service.description}
                         </p>
+                        <p className="text-xs text-gray-500">{formatLocation(service)}</p>
                         <div className="pt-2 flex items-center justify-between">
                           <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
                             Type: {service.providerType}

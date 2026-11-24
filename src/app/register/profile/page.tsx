@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { Alert } from "@/components/ui/Alert";
+import { LocationSelector } from "@/components/ui/LocationSelector";
 import { updateUserProfile } from "@/lib/auth-utils";
-import { User, Phone, MapPin, Building2, GraduationCap, Bus, CreditCard } from "lucide-react";
+import { UserProfile } from "@/types";
+import { User, Phone, Building2, GraduationCap, Bus } from "lucide-react";
 
 export default function ProfileSetupPage() {
   const { firebaseUser, role, refreshUser } = useAuth();
@@ -19,7 +21,7 @@ export default function ProfileSetupPage() {
     displayName: firebaseUser?.displayName || "",
     phoneNumber: "",
     address: "",
-    city: "",
+    district: "",
     state: "",
     country: "India",
     pincode: "",
@@ -48,11 +50,12 @@ export default function ProfileSetupPage() {
     setError(null);
 
     try {
-      const updateData: any = {
+      const updateData: Partial<UserProfile> & Record<string, unknown> = {
         displayName: formData.displayName,
         phoneNumber: formData.phoneNumber,
         address: formData.address,
-        city: formData.city,
+        city: formData.district,
+        district: formData.district,
         state: formData.state,
         country: formData.country,
         pincode: formData.pincode,
@@ -73,9 +76,9 @@ export default function ProfileSetupPage() {
       await updateUserProfile(firebaseUser.uid, updateData);
       await refreshUser();
       router.push("/");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "Failed to save profile. Please try again.");
+      setError(err instanceof Error ? err.message : "Failed to save profile. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -123,34 +126,25 @@ export default function ProfileSetupPage() {
               />
             </div>
 
-            <Input
-              label="Address"
-              value={formData.address}
-              onChange={(e) => handleChange("address", e.target.value)}
-              placeholder="Street address"
-              icon={<MapPin className="h-4 w-4" />}
+            <LocationSelector
+              value={{
+                state: formData.state,
+                district: formData.district,
+                address: formData.address,
+              }}
+              onChange={(location) =>
+                setFormData((prev) => ({ ...prev, ...location }))
+              }
+              className="md:grid-cols-2"
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <Input
-                label="City"
-                value={formData.city}
-                onChange={(e) => handleChange("city", e.target.value)}
-                placeholder="City"
-              />
-              <Input
-                label="State"
-                value={formData.state}
-                onChange={(e) => handleChange("state", e.target.value)}
-                placeholder="State"
-              />
-              <Input
-                label="Pincode"
-                value={formData.pincode}
-                onChange={(e) => handleChange("pincode", e.target.value)}
-                placeholder="Pincode"
-              />
-            </div>
+            <Input
+              label="Pincode"
+              inputMode="numeric"
+              value={formData.pincode}
+              onChange={(e) => handleChange("pincode", e.target.value)}
+              placeholder="Pincode"
+            />
 
             {role === "STUDENT" && (
               <div className="space-y-5 p-5 bg-blue-50/50 rounded-xl border border-blue-100">

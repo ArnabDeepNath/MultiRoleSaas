@@ -7,9 +7,11 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { LocationSelector } from "@/components/ui/LocationSelector";
 import { getAllServices, createServiceRequest } from "@/lib/services/services";
+import { EMPTY_LOCATION, formatLocation, LocationValue, matchesLocation } from "@/lib/location";
 import { Service } from "@/types";
-import { Bus } from "lucide-react";
+import { Bus, MapPin } from "lucide-react";
 
 const STUDENT_ROLE = "STUDENT";
 
@@ -18,6 +20,7 @@ export default function StudentTransportPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<LocationValue>({ ...EMPTY_LOCATION });
 
   useEffect(() => {
     const fetch = async () => {
@@ -27,6 +30,9 @@ export default function StudentTransportPage() {
     };
     fetch();
   }, []);
+
+  const filteredServices = services.filter((service) => matchesLocation(service, filters));
+  const hasFilters = Boolean(filters.state || filters.district || filters.address.trim());
 
   const handleRequest = async (service: Service) => {
     if (!user) return;
@@ -46,20 +52,41 @@ export default function StudentTransportPage() {
   return (
     <ProtectedRoute allowedRoles={[STUDENT_ROLE]}>
       <DashboardLayout title="School Transport">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <h2 className="text-2xl font-bold text-slate-900">School Transport</h2>
-          <Card title="Available Routes">
-            {services.length === 0 ? (
-              <p className="text-center text-slate-500 py-8">No transport routes available.</p>
+        <div className="max-w-5xl mx-auto space-y-6">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">School Transport</h2>
+            <p className="mt-1 text-sm text-slate-600">Select a state and district, or search by street address.</p>
+          </div>
+
+          <Card title="Location filters" description="Choose locations from the dropdown lists. Only the address is free-form.">
+            <div className="space-y-4">
+              <LocationSelector value={filters} onChange={setFilters} mode="filter" />
+              {hasFilters && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setFilters({ ...EMPTY_LOCATION })}>
+                  Clear location filters
+                </Button>
+              )}
+            </div>
+          </Card>
+
+          <Card title={`Available Routes (${filteredServices.length})`}>
+            {filteredServices.length === 0 ? (
+              <p className="text-center text-slate-500 py-8">
+                {hasFilters ? "No transport routes match the selected location." : "No transport routes available."}
+              </p>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
-                {services.map((service) => (
+                {filteredServices.map((service) => (
                   <div key={service.id} className="p-4 rounded-xl border border-slate-200">
                     <div className="flex items-center gap-2 mb-2">
                       <Bus className="h-5 w-5 text-amber-600" />
                       <h3 className="font-semibold text-slate-900">{service.name}</h3>
                     </div>
                     <p className="text-sm text-slate-600">{service.description}</p>
+                    <p className="mt-2 flex items-start gap-1.5 text-xs text-slate-500">
+                      <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>{formatLocation(service)}</span>
+                    </p>
                     <div className="flex items-center justify-between mt-3">
                       <span className="text-lg font-bold text-[#3b4cca]">₹{service.price}</span>
                       <Button size="sm" onClick={() => handleRequest(service)} isLoading={requestingId === service.id}>Request</Button>
