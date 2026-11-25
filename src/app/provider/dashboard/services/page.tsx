@@ -11,6 +11,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Spinner } from "@/components/ui/Spinner";
 import { LocationSelector } from "@/components/ui/LocationSelector";
 import { EMPTY_LOCATION, formatLocation, LocationValue } from "@/lib/location";
+import { omitUndefinedFields } from "@/lib/utils";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -105,7 +106,7 @@ export default function ProviderServicesPage() {
       const previousLocation = editingId
         ? services.find((service) => service.id === editingId)?.location
         : undefined;
-      const serviceData: Omit<Service, "id"> = {
+      const serviceData = omitUndefinedFields<Omit<Service, "id">>({
         providerId: firebaseUser.uid,
         name,
         description,
@@ -113,7 +114,7 @@ export default function ProviderServicesPage() {
         providerType: type,
         ...location,
         location: [location.district, location.state].filter(Boolean).join(", ") || previousLocation || "",
-      };
+      });
 
       if (editingId) {
         await updateDoc(doc(db, "services", editingId), serviceData);

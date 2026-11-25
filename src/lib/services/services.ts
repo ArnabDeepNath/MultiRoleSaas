@@ -13,6 +13,7 @@ import {
   orderBy,
 } from "firebase/firestore";
 import { Service, ServiceRequest, Notification, UserProfile } from "@/types";
+import { omitUndefinedFields } from "@/lib/utils";
 
 const servicesRef = collection(db, "services");
 const requestsRef = collection(db, "serviceRequests");
@@ -39,20 +40,23 @@ export async function getServiceById(serviceId: string): Promise<Service | null>
 }
 
 export async function createService(providerId: string, data: Omit<Service, "id" | "providerId" | "createdAt" | "updatedAt">) {
-  const payload = {
+  const payload = omitUndefinedFields({
     ...data,
     providerId,
     rating: data.rating ?? 0,
     reviews: data.reviews ?? 0,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  };
+  });
   const docRef = await addDoc(servicesRef, payload);
   return { id: docRef.id, ...payload } as Service;
 }
 
 export async function updateService(serviceId: string, data: Partial<Omit<Service, "id" | "providerId">>) {
-  await updateDoc(doc(servicesRef, serviceId), { ...data, updatedAt: Date.now() });
+  await updateDoc(
+    doc(servicesRef, serviceId),
+    omitUndefinedFields({ ...data, updatedAt: Date.now() })
+  );
 }
 
 export async function deleteService(serviceId: string) {
