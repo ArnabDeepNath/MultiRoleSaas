@@ -18,12 +18,13 @@ import {
   Users,
   Settings,
   BarChart3,
-  Shield,
   Wallet,
   FileText,
   LogOut,
+  Target,
 } from "lucide-react";
 import { logout } from "@/lib/auth-utils";
+import { ServiceProviderProfile } from "@/types";
 
 interface NavItem {
   label: string;
@@ -48,7 +49,7 @@ const Sidebar = () => {
     if (role === "STUDENT") {
       return [
         { label: "Home", href: "/student/dashboard", icon: <LayoutDashboard className="h-5 w-5" /> },
-        { label: "Find Tutors", href: "/student/dashboard/tutors", icon: <Search className="h-5 w-5" /> },
+        { label: "Tutors & Institutions", href: "/student/dashboard/tutors", icon: <Search className="h-5 w-5" /> },
         { label: "School Transport", href: "/student/dashboard/transport", icon: <Bus className="h-5 w-5" /> },
         { label: "Marketplace", href: "/student/dashboard/marketplace", icon: <ShoppingCart className="h-5 w-5" /> },
         { label: "Job Board", href: "/student/dashboard/jobs", icon: <Briefcase className="h-5 w-5" /> },
@@ -70,12 +71,14 @@ const Sidebar = () => {
     }
 
     if (role === "SERVICE_PROVIDER") {
+      const isTransporter = (user as ServiceProviderProfile | null)?.providerType === "TRANSPORTER";
       return [
         { label: "Dashboard", href: "/provider/dashboard", icon: <LayoutDashboard className="h-5 w-5" /> },
         { label: "My Services", href: "/provider/dashboard/services", icon: <Briefcase className="h-5 w-5" /> },
         { label: "Requests", href: "/provider/dashboard/requests", icon: <Users className="h-5 w-5" /> },
+        { label: "Lead Generator", href: "/provider/dashboard/leads", icon: <Target className="h-5 w-5" /> },
         { label: "Earnings", href: "/provider/dashboard/earnings", icon: <Wallet className="h-5 w-5" /> },
-        { label: "GPS Check-in", href: "/provider/dashboard/checkin", icon: <MapPin className="h-5 w-5" /> },
+        ...(isTransporter ? [{ label: "GPS Check-in", href: "/provider/dashboard/checkin", icon: <MapPin className="h-5 w-5" /> }] : []),
         { label: "Profile", href: "/provider/dashboard/profile", icon: <UserCircle className="h-5 w-5" /> },
       ];
     }

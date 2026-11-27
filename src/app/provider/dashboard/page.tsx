@@ -113,11 +113,13 @@ export default function ProviderDashboard() {
     }
   };
 
-  const isTransporter = (user as ServiceProviderProfile | null)?.providerType === "TRANSPORTER";
+  const providerType = (user as ServiceProviderProfile | null)?.providerType;
+  const isTransporter = providerType === "TRANSPORTER";
+  const dashboardTitle = isTransporter ? "Transporter Dashboard" : providerType === "INSTITUTION" ? "Institution Dashboard" : "Teacher Dashboard";
 
   return (
     <ProtectedRoute allowedRoles={[PROVIDER_ROLE]}>
-      <DashboardLayout title={isTransporter ? "Transporter Dashboard" : "Teacher Dashboard"}>
+      <DashboardLayout title={dashboardTitle}>
         <div className="space-y-6">
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -128,6 +130,9 @@ export default function ProviderDashboard() {
               </p>
             </div>
             <div className="flex gap-3">
+              <Button asChild>
+                <Link href="/provider/dashboard/leads">Lead Generator</Link>
+              </Button>
               <Button variant="outline" asChild>
                 <Link href="/provider/dashboard/profile">Edit Profile</Link>
               </Button>
@@ -280,6 +285,11 @@ export default function ProviderDashboard() {
                   <Button variant="outline" className="w-full justify-start" asChild>
                     <Link href="/provider/dashboard/requests">
                       <Users className="mr-2 h-4 w-4" /> View All Requests
+                    </Link>
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" asChild>
+                    <Link href="/provider/dashboard/leads">
+                      <Users className="mr-2 h-4 w-4" /> Lead Generator
                     </Link>
                   </Button>
                   <Button variant="outline" className="w-full justify-start" asChild>

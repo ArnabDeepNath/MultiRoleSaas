@@ -4,10 +4,9 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Alert } from "@/components/ui/Alert";
 import { updateUserProfile } from "@/lib/auth-utils";
-import { UserRole } from "@/types";
+import { ServiceProviderProfile, UserProfile, UserRole } from "@/types";
 import { GraduationCap, Users, BookOpen, Bus, Check, HelpCircle } from "lucide-react";
 
 interface RoleOption {
@@ -55,11 +54,11 @@ const ROLES: RoleOption[] = [
 ];
 
 export default function RoleSelectionPage() {
-  const { firebaseUser, refreshUser } = useAuth();
+  const { user, firebaseUser, refreshUser } = useAuth();
   const router = useRouter();
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [selectedLabel, setSelectedLabel] = useState<string>("");
-  const [providerType, setProviderType] = useState<string>("");
+  const [providerType, setProviderType] = useState<string>((user as ServiceProviderProfile | null)?.providerType || "");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,7 +66,7 @@ export default function RoleSelectionPage() {
     setSelectedRole(role.id);
     setSelectedLabel(role.label);
     if (role.label === "TEACHER / INSTITUTION") {
-      setProviderType("TEACHER");
+      setProviderType((current) => current === "INSTITUTION" ? current : "TEACHER");
     } else if (role.label === "TRANSPORTATION PROVIDER") {
       setProviderType("TRANSPORTER");
     } else {
@@ -85,16 +84,16 @@ export default function RoleSelectionPage() {
     setError(null);
 
     try {
-      const updateData: any = { role: selectedRole };
+      const updateData: Partial<UserProfile> & { providerType?: string } = { role: selectedRole };
       if (providerType) {
         updateData.providerType = providerType;
       }
       await updateUserProfile(firebaseUser.uid, updateData);
       await refreshUser();
       router.push("/register/subscription");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "Failed to save role. Please try again.");
+      setError(err instanceof Error ? err.message : "Failed to save role. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -105,7 +104,7 @@ export default function RoleSelectionPage() {
       <div className="w-full max-w-4xl animate-fade-in">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-slate-900">Select Your Role</h1>
-          <p className="mt-2 text-slate-600">Choose how you'll use OmniStud to tailor your experience</p>
+          <p className="mt-2 text-slate-600">Choose how you&#39;ll use OmniStud to tailor your experience</p>
         </div>
 
         <div className="flex items-center justify-center mb-8">

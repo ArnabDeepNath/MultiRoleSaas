@@ -1,7 +1,6 @@
 ﻿"use client";
 
-import React, { useState, useEffect } from "react";
-import { useAuth } from "@/lib/auth-context";
+import React, { useCallback, useState, useEffect } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/Card";
@@ -10,8 +9,12 @@ import { Input } from "@/components/ui/Input";
 import { Alert } from "@/components/ui/Alert";
 import { Spinner } from "@/components/ui/Spinner";
 import { getAllUsers, toggleUserBlock, deleteUserAccount } from "@/lib/services/users";
-import { UserProfile } from "@/types";
-import { Search, Shield, UserX, UserCheck, Trash2 } from "lucide-react";
+import { getAllWallets } from "@/lib/services/leads";
+import { db } from "@/lib/firebase";
+import { doc, setDoc } from "firebase/firestore";
+import { CoinWallet, UserProfile } from "@/types";
+import { currentTimestamp } from "@/lib/utils";
+import { Search, Shield, UserX, UserCheck, Trash2, Coins } from "lucide-react";
 
 const ADMIN_ROLE = "SUPER_ADMIN";
 
@@ -20,23 +23,30 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [wallets, setWallets] = useState<Record<string, CoinWallet>>({});
+  const [coinDrafts, setCoinDrafts] = useState<Record<string, string>>({});
+  const [savingCoinsId, setSavingCoinsId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getAllUsers();
+      const [data, walletData] = await Promise.all([getAllUsers(), getAllWallets()]);
+      const walletMap = Object.fromEntries(walletData.map((wallet) => [wallet.uid, wallet]));
       setUsers(data);
+      setWallets(walletMap);
+      setCoinDrafts(Object.fromEntries(walletData.map((wallet) => [wallet.uid, wallet.balance.toString()])));
     } catch (err) {
       console.error(err);
       setError("Failed to load users.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => void loadUsers(), 0);
+    return () => clearTimeout(timer);
+  }, [loadUsers]);
 
   const handleBlock = async (uid: string, blocked?: boolean) => {
     try {
@@ -56,6 +66,32 @@ export default function AdminUsersPage() {
     } catch (err) {
       console.error(err);
       setError("Failed to delete user.");
+    }
+  };
+
+  const handleSaveCoins = async (uid: string) => {
+    const balance = Number(coinDrafts[uid] ?? "100");
+    if (!Number.isInteger(balance) || balance < 0) {
+      setError("Coin balance must be a non-negative whole number.");
+      return;
+    }
+    setSavingCoinsId(uid);
+    setError(null);
+    try {
+      const wallet: CoinWallet = {
+        uid,
+        balance,
+        lastUnlockId: wallets[uid]?.lastUnlockId || "",
+        updatedAt: currentTimestamp(),
+      };
+      await setDoc(doc(db, "wallets", uid), wallet, { merge: true });
+      setWallets((current) => ({ ...current, [uid]: wallet }));
+      setCoinDrafts((current) => ({ ...current, [uid]: balance.toString() }));
+    } catch (err) {
+      console.error(err);
+      setError("Failed to update the provider coin balance.");
+    } finally {
+      setSavingCoinsId(null);
     }
   };
 
@@ -105,6 +141,7 @@ export default function AdminUsersPage() {
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Role</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Provider Coins</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -122,6 +159,23 @@ export default function AdminUsersPage() {
                         <span className={`text-xs px-2 py-0.5 rounded-full ${u.blocked ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>
                           {u.blocked ? "Blocked" : "Active"}
                         </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {u.role === "SERVICE_PROVIDER" ? (
+                          <div className="flex min-w-40 items-center gap-2">
+                            <Coins className="h-4 w-4 text-amber-500" />
+                            <Input
+                              type="number"
+                              min="0"
+                              step="1"
+                              aria-label={`Coin balance for ${u.displayName}`}
+                              value={coinDrafts[u.uid] ?? "100"}
+                              onChange={(event) => setCoinDrafts((current) => ({ ...current, [u.uid]: event.target.value }))}
+                              className="h-9 w-24"
+                            />
+                            <Button size="sm" variant="outline" onClick={() => handleSaveCoins(u.uid)} isLoading={savingCoinsId === u.uid}>Save</Button>
+                          </div>
+                        ) : <span className="text-slate-400">—</span>}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Button

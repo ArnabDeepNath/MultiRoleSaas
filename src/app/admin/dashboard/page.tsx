@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/lib/auth-context";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/Card";
@@ -19,15 +18,15 @@ import {
   deleteDoc,
   updateDoc,
 } from "firebase/firestore";
-import { AppSettings, UserProfile, EscrowTransaction, SubscriptionConfig } from "@/types";
+import { AppSettings, PaymentStatus, UserProfile, EscrowTransaction, SubscriptionConfig } from "@/types";
 import { releaseEscrow, refundEscrow } from "@/lib/services/payments";
-import { Users, Settings, IndianRupee, Shield, Trash2, CheckCircle, XCircle, Clock, TrendingUp, CreditCard, Wallet, Activity, BarChart3, ArrowRight } from "lucide-react";
+import { currentTimestamp } from "@/lib/utils";
+import { Users, Trash2, CreditCard, Wallet, Activity, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 const ADMIN_ROLE = "SUPER_ADMIN";
 
 export default function AdminDashboard() {
-  const { user, role } = useAuth();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [escrowTransactions, setEscrowTransactions] = useState<EscrowTransaction[]>([]);
@@ -41,6 +40,9 @@ export default function AdminDashboard() {
   const [newProviderTypes, setNewProviderTypes] = useState<string>("");
   const [newAdminKey, setNewAdminKey] = useState<string>("");
   const [platformFee, setPlatformFee] = useState<string>("5");
+  const [providerFreePlanEnabled, setProviderFreePlanEnabled] = useState(false);
+  const [defaultProviderCoins, setDefaultProviderCoins] = useState("100");
+  const [leadUnlockCost, setLeadUnlockCost] = useState("10");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,15 +55,21 @@ export default function AdminDashboard() {
           setNewFee(data.registrationFee.toString());
           setNewProviderTypes(data.allowedServiceProviderTypes.join(", "));
           setNewAdminKey(data.adminKey || "ADMIN123");
-          setPlatformFee((data.platformCommission ?? 5).toString());
+           setPlatformFee((data.platformCommission ?? 5).toString());
+           setProviderFreePlanEnabled(data.providerFreePlanEnabled ?? false);
+           setDefaultProviderCoins((data.defaultProviderCoins ?? 100).toString());
+           setLeadUnlockCost((data.leadUnlockCost ?? 10).toString());
         } else {
           const defaultSettings: AppSettings = {
             registrationFee: 100,
             allowedServiceProviderTypes: ["teacher", "driver", "tutor", "institution"],
             maintenanceMode: false,
             adminKey: "ADMIN123",
-            platformCommission: 5,
-          };
+             platformCommission: 5,
+             providerFreePlanEnabled: false,
+             defaultProviderCoins: 100,
+             leadUnlockCost: 10,
+           };
           await setDoc(docRef, defaultSettings);
           setSettings(defaultSettings);
           setNewFee("100");
@@ -116,24 +124,31 @@ export default function AdminDashboard() {
 
       if (!newAdminKey.trim()) throw new Error("Admin key cannot be empty.");
 
-      const commission = parseFloat(platformFee);
-      if (isNaN(commission) || commission < 0 || commission > 100) throw new Error("Invalid platform commission. Must be 0-100.");
+       const commission = parseFloat(platformFee);
+       if (isNaN(commission) || commission < 0 || commission > 100) throw new Error("Invalid platform commission. Must be 0-100.");
+       const startingCoins = Number(defaultProviderCoins);
+       const unlockPrice = Number(leadUnlockCost);
+       if (!Number.isInteger(startingCoins) || startingCoins < 0) throw new Error("Default provider coins must be a non-negative whole number.");
+       if (!Number.isInteger(unlockPrice) || unlockPrice < 1) throw new Error("Lead unlock cost must be a positive whole number.");
 
-      const updatedSettings: AppSettings = {
+       const updatedSettings: AppSettings = {
         registrationFee: fee,
         allowedServiceProviderTypes: providerTypes,
         maintenanceMode: settings?.maintenanceMode || false,
         adminKey: newAdminKey.trim(),
-        platformCommission: commission,
-      };
+         platformCommission: commission,
+         providerFreePlanEnabled,
+         defaultProviderCoins: startingCoins,
+         leadUnlockCost: unlockPrice,
+       };
 
       await setDoc(doc(db, "settings", "app_settings"), updatedSettings);
       setSettings(updatedSettings);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error saving settings:", err);
-      setError(err.message || "Failed to save settings.");
+      setError(err instanceof Error ? err.message : "Failed to save settings.");
     } finally {
       setIsSaving(false);
     }
@@ -155,11 +170,11 @@ export default function AdminDashboard() {
       const newStatus = currentStatus === "COMPLETED" ? "PENDING" : "COMPLETED";
       await updateDoc(doc(db, "users", uid), {
         paymentStatus: newStatus,
-        updatedAt: Date.now(),
+        updatedAt: currentTimestamp(),
       });
       setUsers(
         users.map((u) =>
-          u.uid === uid ? { ...u, paymentStatus: newStatus as any } : u
+          u.uid === uid ? { ...u, paymentStatus: newStatus as PaymentStatus } : u
         )
       );
     } catch (err) {
@@ -192,7 +207,6 @@ export default function AdminDashboard() {
   const activeSubscribers = users.filter((u) => u.paymentStatus === "COMPLETED").length;
   const totalEscrow = escrowTransactions.reduce((sum, tx) => sum + tx.amount, 0);
   const totalCommission = escrowTransactions.reduce((sum, tx) => sum + tx.commission, 0);
-  const platformHealth = "Operational";
 
   if (loading) {
     return (
@@ -408,6 +422,32 @@ export default function AdminDashboard() {
                       onChange={(e) => setNewAdminKey(e.target.value)}
                       placeholder="e.g. ADMIN123"
                     />
+                  </div>
+
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <label className="flex items-start gap-3 text-sm font-medium text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={providerFreePlanEnabled}
+                        onChange={(event) => setProviderFreePlanEnabled(event.target.checked)}
+                        className="mt-1 h-4 w-4 rounded border-slate-300"
+                      />
+                      <span>
+                        Enable free plan for providers
+                        <span className="mt-1 block text-xs font-normal text-slate-600">Teachers, institutions, and transporters can select a ₹0 plan with no expiry.</span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Default Provider Coins</label>
+                      <Input type="number" min="0" step="1" value={defaultProviderCoins} onChange={(event) => setDefaultProviderCoins(event.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Coins / Lead Unlock</label>
+                      <Input type="number" min="1" step="1" value={leadUnlockCost} onChange={(event) => setLeadUnlockCost(event.target.value)} />
+                    </div>
                   </div>
 
                   <div className="space-y-2">

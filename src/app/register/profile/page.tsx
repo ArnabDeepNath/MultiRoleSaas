@@ -9,14 +9,18 @@ import { Card } from "@/components/ui/Card";
 import { Alert } from "@/components/ui/Alert";
 import { LocationSelector } from "@/components/ui/LocationSelector";
 import { updateUserProfile } from "@/lib/auth-utils";
+import { ensureProviderWallet } from "@/lib/services/leads";
+import { parseCoordinate } from "@/lib/geo";
 import { UserProfile } from "@/types";
-import { User, Phone, Building2, GraduationCap, Bus } from "lucide-react";
+import { User, Phone, Building2, GraduationCap, Bus, LocateFixed } from "lucide-react";
 
 export default function ProfileSetupPage() {
   const { firebaseUser, role, refreshUser } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationAccuracy, setLocationAccuracy] = useState<number | undefined>();
   const [formData, setFormData] = useState({
     displayName: firebaseUser?.displayName || "",
     phoneNumber: "",
@@ -25,6 +29,8 @@ export default function ProfileSetupPage() {
     state: "",
     country: "India",
     pincode: "",
+    lat: "",
+    lng: "",
     grade: "",
     school: "",
     board: "CBSE",
@@ -39,10 +45,43 @@ export default function ProfileSetupPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleCaptureLocation = () => {
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by this browser. Enter latitude and longitude manually.");
+      return;
+    }
+
+    setIsLocating(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setFormData((prev) => ({
+          ...prev,
+          lat: position.coords.latitude.toFixed(6),
+          lng: position.coords.longitude.toFixed(6),
+        }));
+        setLocationAccuracy(position.coords.accuracy);
+        setIsLocating(false);
+      },
+      () => {
+        setError("Unable to capture your location. Allow location access or enter coordinates manually.");
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firebaseUser) {
       setError("You must be logged in to complete profile setup");
+      return;
+    }
+
+    const lat = parseCoordinate(formData.lat, -90, 90);
+    const lng = parseCoordinate(formData.lng, -180, 180);
+    if (lat === null || lng === null) {
+      setError("Valid latitude and longitude are required to complete registration.");
       return;
     }
 
@@ -59,7 +98,11 @@ export default function ProfileSetupPage() {
         state: formData.state,
         country: formData.country,
         pincode: formData.pincode,
+        lat,
+        lng,
+        locationCapturedAt: Date.now(),
       };
+      if (locationAccuracy !== undefined) updateData.locationAccuracy = locationAccuracy;
 
       if (role === "STUDENT") {
         updateData.grade = formData.grade;
@@ -74,6 +117,7 @@ export default function ProfileSetupPage() {
       }
 
       await updateUserProfile(firebaseUser.uid, updateData);
+      if (role === "SERVICE_PROVIDER") await ensureProviderWallet(firebaseUser.uid);
       await refreshUser();
       router.push("/");
     } catch (err: unknown) {
@@ -145,6 +189,37 @@ export default function ProfileSetupPage() {
               onChange={(e) => handleChange("pincode", e.target.value)}
               placeholder="Pincode"
             />
+
+            <div className="space-y-4 rounded-xl border border-blue-100 bg-blue-50/50 p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="font-semibold text-slate-900">Registration Geolocation</h3>
+                  <p className="text-xs text-slate-600">Required for nearby services and the 5 km lead generator.</p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={handleCaptureLocation} isLoading={isLocating}>
+                  <LocateFixed className="mr-2 h-4 w-4" /> Use my current location
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Input
+                  label="Latitude"
+                  required
+                  inputMode="decimal"
+                  value={formData.lat}
+                  onChange={(e) => handleChange("lat", e.target.value)}
+                  placeholder="e.g. 26.144500"
+                />
+                <Input
+                  label="Longitude"
+                  required
+                  inputMode="decimal"
+                  value={formData.lng}
+                  onChange={(e) => handleChange("lng", e.target.value)}
+                  placeholder="e.g. 91.736200"
+                />
+              </div>
+              {locationAccuracy !== undefined && <p className="text-xs text-emerald-700">Location captured with approximately {Math.round(locationAccuracy)} m accuracy.</p>}
+            </div>
 
             {role === "STUDENT" && (
               <div className="space-y-5 p-5 bg-blue-50/50 rounded-xl border border-blue-100">

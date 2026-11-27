@@ -6,6 +6,7 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc, collection, addDoc } from "firebase/firestore";
 import { UserProfile, AppSettings, Service, ServiceRequest, EscrowTransaction, SubscriptionConfig } from "@/types";
+import { ensureProviderWallet, syncLeadRegistration } from "@/lib/services/leads";
 
 export const DEMO_CREDENTIALS = {
   admin: { email: "admin@omnistud.com", password: "demo123", name: "OmniStud Admin" },
@@ -16,6 +17,14 @@ export const DEMO_CREDENTIALS = {
 };
 
 export const DEFAULT_ADMIN_KEY = "ADMIN123";
+
+const DEMO_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  admin: { lat: 26.1445, lng: 91.7362 },
+  teacher: { lat: 26.145, lng: 91.7368 },
+  transporter: { lat: 26.146, lng: 91.737 },
+  student: { lat: 26.1448, lng: 91.7365 },
+  parent: { lat: 26.1452, lng: 91.736 },
+};
 
 export const SUBSCRIPTION_PLANS: SubscriptionConfig[] = [
   {
@@ -94,8 +103,11 @@ export async function seedDemoData() {
       registrationFee: 100,
       allowedServiceProviderTypes: ["teacher", "driver", "tutor", "institution"],
       maintenanceMode: false,
-      adminKey: DEFAULT_ADMIN_KEY,
-    };
+       adminKey: DEFAULT_ADMIN_KEY,
+       providerFreePlanEnabled: false,
+       defaultProviderCoins: 100,
+       leadUnlockCost: 10,
+     };
     await setDoc(settingsRef, defaultSettings);
   }
 
@@ -116,8 +128,7 @@ export async function seedDemoData() {
       let uid: string;
       try {
         const userCredential = await signInWithEmailAndPassword(auth, creds.email, creds.password);
-        uid = userCredential.user.uid;
-        await auth.signOut();
+         uid = userCredential.user.uid;
       } catch {
         const newUser = await createUserWithEmailAndPassword(auth, creds.email, creds.password);
         uid = newUser.user.uid;
@@ -145,8 +156,10 @@ export async function seedDemoData() {
         state: "Assam",
         district: "Kamrup Metropolitan",
         country: "India",
-        pincode: "781001",
-      };
+         pincode: "781001",
+         ...DEMO_COORDINATES[role],
+         locationCapturedAt: Date.now(),
+       };
 
       if (!userSnap.exists()) {
         if (role === "admin") {
@@ -194,13 +207,24 @@ export async function seedDemoData() {
             children: [],
           });
         }
-      } else {
-        await updateDoc(userRef, {
-          paymentStatus: "COMPLETED",
-          isDemo: true,
-          updatedAt: Date.now(),
-        });
-      }
+       } else {
+         await updateDoc(userRef, {
+           paymentStatus: "COMPLETED",
+           isDemo: true,
+           lat: baseProfile.lat,
+           lng: baseProfile.lng,
+           locationCapturedAt: Date.now(),
+           updatedAt: Date.now(),
+         });
+       }
+
+       const savedProfile = await getDoc(userRef);
+       if (savedProfile.exists()) {
+         await syncLeadRegistration(savedProfile.data() as UserProfile);
+       }
+       if (role === "teacher" || role === "transporter") {
+         await ensureProviderWallet(uid);
+       }
     } catch (error) {
       console.error(`Error seeding ${role} demo user:`, error);
     }
@@ -233,8 +257,10 @@ export async function seedDemoData() {
         name: "Math Tutoring - Grade 5",
         description: "Comprehensive mathematics tutoring for Grade 5 students covering arithmetic, geometry, and problem solving.",
         price: 2500,
-        providerType: "TEACHER",
-        category: "Tutoring",
+         providerType: "TEACHER",
+         category: "Tutoring",
+         subject: "Mathematics",
+         hobby: "Chess",
         location: "Guwahati",
         address: "Guwahati",
         state: "Assam",
@@ -247,9 +273,11 @@ export async function seedDemoData() {
         name: "Science Class - Grade 5",
         description: "Interactive science classes with practical experiments and conceptual learning.",
         price: 2000,
-        providerType: "TEACHER",
-        category: "Tutoring",
-        location: "Guwahati",
+         providerType: "TEACHER",
+         category: "Tutoring",
+         subject: "Science",
+         hobby: "Robotics",
+         location: "Guwahati",
         address: "Guwahati",
         state: "Assam",
         district: "Kamrup Metropolitan",
@@ -261,9 +289,11 @@ export async function seedDemoData() {
         name: "School Bus Route #15",
         description: "Safe school transportation with GPS tracking, covering major areas of Guwahati.",
         price: 3500,
-        providerType: "TRANSPORTER",
-        category: "Transportation",
-        location: "Guwahati",
+         providerType: "TRANSPORTER",
+         category: "Transportation",
+         route: "Guwahati Airport → Guwahati Prep School",
+         vehicleType: "School Bus",
+         location: "Guwahati",
         address: "Guwahati",
         state: "Assam",
         district: "Kamrup Metropolitan",
@@ -275,18 +305,38 @@ export async function seedDemoData() {
         name: "Van Route #3 - City Prep",
         description: "Door-to-door van service for City Prep School students with live tracking.",
         price: 2800,
-        providerType: "TRANSPORTER",
-        category: "Transportation",
-        location: "Guwahati",
+         providerType: "TRANSPORTER",
+         category: "Transportation",
+         route: "Zoo Road → City Prep School",
+         vehicleType: "Van",
+         location: "Guwahati",
         address: "Guwahati",
         state: "Assam",
         district: "Kamrup Metropolitan",
         rating: 4.5,
         reviews: 15,
-      },
-    ];
+       },
+       {
+         providerId: createdUsers.teacher || "teacher",
+         name: "City Prep Institution - Primary",
+         description: "CBSE primary education with hobby clubs and day-boarding facilities.",
+         price: 4500,
+         providerType: "INSTITUTION",
+         category: "School",
+         school: "City Prep School",
+         board: "CBSE",
+         hobby: "Music",
+         otherMaster: "Day Boarding",
+         location: "Guwahati",
+         address: "Guwahati",
+         state: "Assam",
+         district: "Kamrup Metropolitan",
+         rating: 4.7,
+         reviews: 20,
+       },
+     ];
 
-    for (let i = 0; i < services.length; i++) {
+     for (let i = 0; i < services.length; i++) {
       await addDoc(servicesRef, services[i]);
     }
   }

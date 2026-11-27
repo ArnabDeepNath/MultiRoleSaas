@@ -11,6 +11,7 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 import { UserProfile, PaymentStatus } from "@/types";
+import { syncLeadRegistration } from "@/lib/services/leads";
 
 export const login = async (email: string, pass: string) => {
   return await signInWithEmailAndPassword(auth, email, pass);
@@ -62,6 +63,10 @@ export const updateUserProfile = async (
     ...data,
     updatedAt: Date.now(),
   });
+  const updatedProfile = await getDoc(userRef);
+  if (updatedProfile.exists()) {
+    await syncLeadRegistration(updatedProfile.data() as UserProfile);
+  }
 };
 
 export const updatePaymentStatus = async (

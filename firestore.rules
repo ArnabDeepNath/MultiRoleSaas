@@ -16,6 +16,27 @@ service cloud.firestore {
     function currentUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
+    function defaultProviderCoins() {
+      return get(/databases/$(database)/documents/settings/app_settings).data.get('defaultProviderCoins', 100);
+    }
+    function leadUnlockCost() {
+      return get(/databases/$(database)/documents/settings/app_settings).data.get('leadUnlockCost', 10);
+    }
+    function isProvider() {
+      return isAuthenticated() && currentUserData().role == 'SERVICE_PROVIDER';
+    }
+    function validWalletUnlock(walletId) {
+      let unlockId = request.resource.data.lastUnlockId;
+      let unlockPath = /databases/$(database)/documents/leadUnlocks/$(unlockId);
+      return isProvider() && walletId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'lastUnlockId', 'updatedAt']) &&
+        request.resource.data.balance == resource.data.balance - leadUnlockCost() &&
+        request.resource.data.balance >= 0 &&
+        unlockId is string &&
+        existsAfter(unlockPath) &&
+        getAfter(unlockPath).data.providerId == request.auth.uid &&
+        getAfter(unlockPath).data.coinsSpent == leadUnlockCost();
+    }
 
     // App settings: readable by anyone (needed for registration page), writable by admins
     match /settings/{document} {
@@ -35,6 +56,43 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isOwner(userId);
       allow update: if isAuthenticated() && (isOwner(userId) || isAdmin());
       allow delete: if isAdmin();
+    }
+
+    // Public proximity directory. Contact details deliberately live in leadContacts.
+    match /leadProfiles/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // A phone number is visible only to its owner, an admin, or an unlocking provider.
+    match /leadContacts/{userId} {
+      allow read: if isOwner(userId) || isAdmin() ||
+        (isProvider() && exists(/databases/$(database)/documents/leadUnlocks/$(request.auth.uid + '_' + userId)));
+      allow create, update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Wallets can only be debited by the exact configured price with a matching unlock.
+    match /wallets/{walletId} {
+      allow read: if isOwner(walletId) || isAdmin();
+      allow create: if isAdmin() || (isProvider() && isOwner(walletId) &&
+        request.resource.data.balance == defaultProviderCoins());
+      allow update: if isAdmin() || validWalletUnlock(walletId);
+      allow delete: if isAdmin();
+    }
+
+    match /leadUnlocks/{unlockId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.providerId == request.auth.uid);
+      allow create: if isProvider() &&
+        request.resource.data.providerId == request.auth.uid &&
+        unlockId == request.auth.uid + '_' + request.resource.data.leadId &&
+        request.resource.data.coinsSpent == leadUnlockCost() &&
+        exists(/databases/$(database)/documents/leadProfiles/$(request.resource.data.leadId)) &&
+        getAfter(/databases/$(database)/documents/wallets/$(request.auth.uid)).data.balance ==
+          get(/databases/$(database)/documents/wallets/$(request.auth.uid)).data.balance - leadUnlockCost() &&
+        getAfter(/databases/$(database)/documents/wallets/$(request.auth.uid)).data.lastUnlockId == unlockId;
+      allow update, delete: if isAdmin();
     }
 
     // Services: readable by authenticated users; writable by service providers and admins

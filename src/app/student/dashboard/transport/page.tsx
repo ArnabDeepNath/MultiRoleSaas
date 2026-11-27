@@ -6,10 +6,12 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { LocationSelector } from "@/components/ui/LocationSelector";
 import { getAllServices, createServiceRequest } from "@/lib/services/services";
 import { EMPTY_LOCATION, formatLocation, LocationValue, matchesLocation } from "@/lib/location";
+import { matchesExactFilter, uniqueServiceValues } from "@/lib/service-filters";
 import { Service } from "@/types";
 import { Bus, MapPin } from "lucide-react";
 
@@ -21,6 +23,7 @@ export default function StudentTransportPage() {
   const [loading, setLoading] = useState(true);
   const [requestingId, setRequestingId] = useState<string | null>(null);
   const [filters, setFilters] = useState<LocationValue>({ ...EMPTY_LOCATION });
+  const [route, setRoute] = useState("");
 
   useEffect(() => {
     const fetch = async () => {
@@ -31,8 +34,9 @@ export default function StudentTransportPage() {
     fetch();
   }, []);
 
-  const filteredServices = services.filter((service) => matchesLocation(service, filters));
-  const hasFilters = Boolean(filters.state || filters.district || filters.address.trim());
+  const routeOptions = Array.from(new Set(uniqueServiceValues(services, "route")));
+  const filteredServices = services.filter((service) => matchesLocation(service, filters) && matchesExactFilter(service.route, route));
+  const hasFilters = Boolean(filters.state || filters.district || filters.address.trim() || route);
 
   const handleRequest = async (service: Service) => {
     if (!user) return;
@@ -61,9 +65,18 @@ export default function StudentTransportPage() {
           <Card title="Location filters" description="Choose locations from the dropdown lists. Only the address is free-form.">
             <div className="space-y-4">
               <LocationSelector value={filters} onChange={setFilters} mode="filter" />
+              <Select
+                label="Route"
+                value={route}
+                onChange={(event) => setRoute(event.target.value)}
+                options={[
+                  { value: "", label: routeOptions.length ? "All routes" : "No routes available" },
+                  ...routeOptions.map((value) => ({ value, label: value })),
+                ]}
+              />
               {hasFilters && (
-                <Button type="button" variant="outline" size="sm" onClick={() => setFilters({ ...EMPTY_LOCATION })}>
-                  Clear location filters
+                <Button type="button" variant="outline" size="sm" onClick={() => { setFilters({ ...EMPTY_LOCATION }); setRoute(""); }}>
+                  Clear filters
                 </Button>
               )}
             </div>
@@ -83,6 +96,7 @@ export default function StudentTransportPage() {
                       <h3 className="font-semibold text-slate-900">{service.name}</h3>
                     </div>
                     <p className="text-sm text-slate-600">{service.description}</p>
+                    {service.route && <p className="mt-2 text-sm font-medium text-amber-700">Route: {service.route}</p>}
                     <p className="mt-2 flex items-start gap-1.5 text-xs text-slate-500">
                       <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>{formatLocation(service)}</span>

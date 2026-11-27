@@ -12,6 +12,9 @@ import { Spinner } from "@/components/ui/Spinner";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ServiceProviderProfile } from "@/types";
+import { parseCoordinate } from "@/lib/geo";
+import { syncLeadRegistration } from "@/lib/services/leads";
+import { LocateFixed } from "lucide-react";
 
 const PROVIDER_ROLE = "SERVICE_PROVIDER";
 
@@ -26,6 +29,9 @@ export default function ProviderProfilePage() {
   const [bio, setBio] = useState("");
   const [providerType, setProviderType] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
+  const [isLocating, setIsLocating] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -38,7 +44,9 @@ export default function ProviderProfilePage() {
           setProfile(data);
           setBio(data.bio || "");
           setProviderType(data.providerType || "");
-          setPhoneNumber(data.phoneNumber || "");
+           setPhoneNumber(data.phoneNumber || "");
+           setLat(data.lat?.toString() || "");
+           setLng(data.lng?.toString() || "");
         }
       } catch (err) {
         console.error("Error fetching profile:", err);
@@ -51,6 +59,26 @@ export default function ProviderProfilePage() {
     fetchProfile();
   }, [user]);
 
+  const handleCaptureLocation = () => {
+    if (!navigator.geolocation) {
+      setError("Geolocation is unavailable. Enter coordinates manually.");
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLat(position.coords.latitude.toFixed(6));
+        setLng(position.coords.longitude.toFixed(6));
+        setIsLocating(false);
+      },
+      () => {
+        setError("Unable to capture location. Enter coordinates manually.");
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   const handleUpdateProfile = async () => {
     if (!profile) return;
     setIsUpdating(true);
@@ -58,20 +86,29 @@ export default function ProviderProfilePage() {
     setSuccess(false);
 
     try {
+      const parsedLat = parseCoordinate(lat, -90, 90);
+      const parsedLng = parseCoordinate(lng, -180, 180);
+      if (parsedLat === null || parsedLng === null) {
+        throw new Error("Valid latitude and longitude are required for nearby leads.");
+      }
       const updatedData: Partial<ServiceProviderProfile> = {
         bio,
         providerType,
         phoneNumber,
+        lat: parsedLat,
+        lng: parsedLng,
+        locationCapturedAt: Date.now(),
         updatedAt: Date.now(),
       };
 
       await updateDoc(doc(db, "users", user!.uid), updatedData);
+      await syncLeadRegistration({ ...profile, ...updatedData } as ServiceProviderProfile);
       setProfile({ ...profile, ...updatedData } as ServiceProviderProfile);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error updating profile:", err);
-      setError("Failed to update profile.");
+      setError(err instanceof Error ? err.message : "Failed to update profile.");
     } finally {
       setIsUpdating(false);
     }
@@ -136,6 +173,19 @@ export default function ProviderProfilePage() {
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     placeholder="e.g. +91 98765 43210"
                   />
+                </div>
+
+                <div className="space-y-3 rounded-lg border border-blue-100 bg-blue-50/50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-sm font-medium text-gray-700">Lead Generator Location</label>
+                    <Button type="button" size="sm" variant="outline" onClick={handleCaptureLocation} isLoading={isLocating}>
+                      <LocateFixed className="mr-2 h-4 w-4" /> Capture
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input label="Latitude" required inputMode="decimal" value={lat} onChange={(event) => setLat(event.target.value)} />
+                    <Input label="Longitude" required inputMode="decimal" value={lng} onChange={(event) => setLng(event.target.value)} />
+                  </div>
                 </div>
 
                 <div className="space-y-2">

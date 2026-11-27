@@ -8,8 +8,8 @@ import { Card } from "@/components/ui/Card";
 import { Alert } from "@/components/ui/Alert";
 import { updateSubscription } from "@/lib/auth-utils";
 import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
-import { SubscriptionConfig, SubscriptionBilling, ServiceProviderProfile } from "@/types";
+import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import { AppSettings, SubscriptionConfig, SubscriptionBilling, ServiceProviderProfile } from "@/types";
 import { SUBSCRIPTION_PLANS, TRANSPORTER_SUBSCRIPTION_PLANS } from "@/lib/demo-data";
 import { Check, Sparkles, CreditCard, HelpCircle } from "lucide-react";
 
@@ -32,7 +32,11 @@ export default function SubscriptionPage() {
 
       try {
         const plansRef = collection(db, "subscriptionPlans");
-        const snap = await getDocs(plansRef);
+        const [snap, settingsSnap] = await Promise.all([
+          getDocs(plansRef),
+          getDoc(doc(db, "settings", "app_settings")),
+        ]);
+        const settings = settingsSnap.exists() ? settingsSnap.data() as AppSettings : null;
         const data = snap.docs.map((d) => d.data() as SubscriptionConfig);
         const eligiblePlans = data.filter((plan) => {
           const isApproved = plan.approved === true ||
@@ -51,7 +55,17 @@ export default function SubscriptionPage() {
         const availablePlans = providerType === "TRANSPORTER"
           ? (transporterPlans.length > 0 ? transporterPlans : fallbackPlans)
           : (eligiblePlans.length > 0 ? eligiblePlans : fallbackPlans);
-        setPlans([...availablePlans].sort((a, b) => a.monthlyPrice - b.monthlyPrice));
+        const freeProviderPlan: SubscriptionConfig[] = user?.role === "SERVICE_PROVIDER" && settings?.providerFreePlanEnabled ? [{
+          plan: "FREE_PROVIDER",
+          name: "Free Provider Plan",
+          monthlyPrice: 0,
+          yearlyPrice: 0,
+          features: ["No subscription payment", "No expiry", "Available while enabled by admin"],
+          color: "#059669",
+          approved: true,
+          roles: ["SERVICE_PROVIDER"],
+        }] : [];
+        setPlans([...freeProviderPlan, ...availablePlans].sort((a, b) => a.monthlyPrice - b.monthlyPrice));
       } catch (err) {
         console.error("Error fetching plans:", err);
         setPlans(fallbackPlans);
@@ -75,8 +89,10 @@ export default function SubscriptionPage() {
     setError(null);
 
     try {
-      // Simulate payment processing
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (selectedPlan !== "FREE_PROVIDER") {
+        // Simulate payment processing for paid plans only.
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
       await updateSubscription(firebaseUser.uid, selectedPlan, billing);
       await refreshUser();
       router.push("/register/profile");
@@ -163,7 +179,7 @@ export default function SubscriptionPage() {
                       <h3 className="text-lg font-bold text-slate-900">{plan.name}</h3>
                       <div className="mt-4 flex items-baseline justify-center">
                         <span className="text-4xl font-bold" style={{ color: plan.color }}>
-                          ${price}
+                          ₹{price}
                         </span>
                         <span className="text-slate-500 ml-1">/{billing === "MONTHLY" ? "month" : "year"}</span>
                       </div>
@@ -206,9 +222,9 @@ export default function SubscriptionPage() {
               <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#3b4cca]/10 mb-3">
                 <CreditCard className="h-6 w-6 text-[#3b4cca]" />
               </div>
-              <h3 className="text-xl font-bold text-slate-900">Complete Payment</h3>
+              <h3 className="text-xl font-bold text-slate-900">{selectedPlan === "FREE_PROVIDER" ? "Activate Free Plan" : "Complete Payment"}</h3>
               <p className="text-sm text-slate-600 mt-1">
-                Demo payment - no real charges
+                {selectedPlan === "FREE_PROVIDER" ? "No payment or expiry applies to this plan" : "Demo payment - no real charges"}
               </p>
             </div>
 
@@ -225,27 +241,29 @@ export default function SubscriptionPage() {
               <div className="flex justify-between items-center">
                 <span className="font-medium text-slate-900">Total</span>
                 <span className="text-xl font-bold text-[#3b4cca]">
-                  ${getPrice(plans.find((p) => p.plan === selectedPlan)!)}
+                  ₹{getPrice(plans.find((p) => p.plan === selectedPlan)!)}
                 </span>
               </div>
             </div>
 
-            <div className="space-y-3 mb-6">
-              <div className="p-3 border border-slate-200 rounded-lg flex items-center gap-3">
-                <div className="h-8 w-12 bg-slate-200 rounded"></div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-900">Demo Card</p>
-                  <p className="text-xs text-slate-500">**** **** **** 4242</p>
+            {selectedPlan !== "FREE_PROVIDER" && (
+              <div className="space-y-3 mb-6">
+                <div className="p-3 border border-slate-200 rounded-lg flex items-center gap-3">
+                  <div className="h-8 w-12 bg-slate-200 rounded"></div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-900">Demo Card</p>
+                    <p className="text-xs text-slate-500">**** **** **** 4242</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setShowPayment(false)}>
                 Back
               </Button>
               <Button className="flex-1" onClick={handleCompletePayment} isLoading={isLoading}>
-                Complete Payment
+                {selectedPlan === "FREE_PROVIDER" ? "Activate Free Plan" : "Complete Payment"}
               </Button>
             </div>
           </Card>

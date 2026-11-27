@@ -1,7 +1,7 @@
 export type UserRole = 'SUPER_ADMIN' | 'SERVICE_PROVIDER' | 'STUDENT' | 'PARENT' | 'TEACHER' | 'TRANSPORTER';
 export type ProviderType = 'TEACHER' | 'TRANSPORTER' | 'INSTITUTION';
 export type PaymentStatus = 'PENDING' | 'COMPLETED';
-export type SubscriptionPlan = 'BASIC' | 'PRO' | 'ENTERPRISE' | 'TRANSPORTER_BASIC' | 'TRANSPORTER_PRO' | 'TRANSPORTER_ENTERPRISE';
+export type SubscriptionPlan = 'BASIC' | 'PRO' | 'ENTERPRISE' | 'TRANSPORTER_BASIC' | 'TRANSPORTER_PRO' | 'TRANSPORTER_ENTERPRISE' | 'FREE_PROVIDER';
 export type SubscriptionBilling = 'MONTHLY' | 'YEARLY';
 
 export interface UserProfile {
@@ -24,6 +24,10 @@ export interface UserProfile {
   country?: string;
   pincode?: string;
   blocked?: boolean;
+  lat?: number;
+  lng?: number;
+  locationCapturedAt?: number;
+  locationAccuracy?: number;
 }
 
 export interface ServiceProviderProfile extends UserProfile {
@@ -59,6 +63,9 @@ export interface AppSettings {
   maintenanceMode: boolean;
   adminKey: string;
   platformCommission?: number;
+  providerFreePlanEnabled?: boolean;
+  defaultProviderCoins?: number;
+  leadUnlockCost?: number;
 }
 
 export interface Payment {
@@ -80,6 +87,15 @@ export interface Service {
   price: number;
   providerType: string;
   category?: string;
+  subject?: string;
+  school?: string;
+  board?: string;
+  hobby?: string;
+  otherMaster?: string;
+  route?: string;
+  vehicleType?: string;
+  lat?: number;
+  lng?: number;
   location?: string;
   address?: string;
   state?: string;
@@ -128,6 +144,41 @@ export interface EscrowTransaction {
   serviceName: string;
   createdAt: number;
   releasedAt?: number;
+}
+
+export interface LeadProfile {
+  uid: string;
+  displayName: string;
+  role: UserRole;
+  providerType?: string;
+  lat: number;
+  lng: number;
+  state?: string;
+  district?: string;
+  city?: string;
+  hasPhone?: boolean;
+  updatedAt: number;
+}
+
+export interface LeadContact {
+  uid: string;
+  email: string;
+  phoneNumber: string;
+}
+
+export interface CoinWallet {
+  uid: string;
+  balance: number;
+  lastUnlockId?: string;
+  updatedAt: number;
+}
+
+export interface LeadUnlock {
+  id: string;
+  providerId: string;
+  leadId: string;
+  coinsSpent: number;
+  createdAt: number;
 }
 
 export interface SubscriptionConfig {
